@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지뢰 찾기 게임 by 이자원</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Pretendard', sans-serif;
+            transition: background-color 0.3s ease;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.05s;
+            font-size: 14px;
+        }
+
+        /* 라이트 모드 셀 스타일 */
+        .cell.hidden {
+            background-color: #d1d5db;
+            border: 3px solid;
+            border-color: #f9fafb #9ca3af #9ca3af #f9fafb;
+        }
+        .cell.revealed {
+            background-color: #e5e7eb;
+            border: 1px solid #bdc3c7;
+        }
+
+        /* 다크 모드 셀 스타일 */
+        .dark .cell.hidden {
+            background-color: #374151;
+            border-color: #4b5563 #1f2937 #1f2937 #4b5563;
+        }
+        .dark .cell.revealed {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+        }
+
+        .cell.mine {
+            background-color: #ef4444 !important;
+        }
+
+        /* 숫자별 색상 (다크모드에서도 잘 보이도록 보정) */
+        .count-1 { color: #2563eb; }
+        .dark .count-1 { color: #60a5fa; }
+        .count-2 { color: #16a34a; }
+        .dark .count-2 { color: #4ade80; }
+        .count-3 { color: #dc2626; }
+        .dark .count-3 { color: #f87171; }
+        .count-4 { color: #1e3a8a; }
+        .dark .count-4 { color: #818cf8; }
+        .count-5 { color: #7f1d1d; }
+        .count-6 { color: #0891b2; }
+        .count-7 { color: #000000; }
+        .dark .count-7 { color: #ffffff; }
+        .count-8 { color: #4b5563; }
+
+        .game-container {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .difficulty-btn.active {
+            background-color: #3b82f6 !important;
+            color: white !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+
+    <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl game-container max-w-full overflow-auto border border-gray-200 dark:border-slate-700">
+        <!-- 상단 타이틀 -->
+        <div class="text-center mb-4">
+            <h1 class="text-xl font-800 text-slate-800 dark:text-slate-100">지뢰 찾기 게임 <span class="text-blue-500 text-sm font-semibold">by 이자원</span></h1>
+        </div>
+
+        <!-- 컨트롤부 -->
+        <div class="flex flex-col gap-4 mb-6">
+            <div class="flex justify-between items-center bg-gray-100 dark:bg-slate-700 p-4 rounded-2xl border-b-4 border-gray-300 dark:border-slate-900">
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Mines</span>
+                    <span id="mine-count" class="bg-black text-red-500 px-3 py-1 rounded font-mono text-2xl border border-gray-700">000</span>
+                </div>
+                
+                <button id="reset-btn" class="bg-yellow-400 hover:bg-yellow-500 w-12 h-12 flex items-center justify-center rounded-full text-2xl shadow-inner transition-transform active:scale-90 border-2 border-yellow-600">
+                    😊
+                </button>
+
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Time</span>
+                    <span id="timer" class="bg-black text-red-500 px-3 py-1 rounded font-mono text-2xl border border-gray-700">000</span>
+                </div>
+            </div>
+
+            <div class="flex justify-center gap-2">
+                <button id="btn-beginner" onclick="startGame('beginner')" class="difficulty-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors">초급</button>
+                <button id="btn-intermediate" onclick="startGame('intermediate')" class="difficulty-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors">중급</button>
+                <button id="btn-expert" onclick="startGame('expert')" class="difficulty-btn px-4 py-2 rounded-xl text-xs font-bold bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300 transition-colors">고급</button>
+            </div>
+        </div>
+
+        <!-- 게임 보드 -->
+        <div class="flex justify-center">
+            <div id="board" class="grid gap-0 border-4 border-gray-400 dark:border-slate-600 bg-gray-400 dark:bg-slate-600 shadow-inner"></div>
+        </div>
+
+        <!-- 하단 도구 -->
+        <div class="mt-6 flex justify-between items-center text-xs text-gray-400 dark:text-slate-500 px-1">
+            <div class="flex gap-4">
+                <span>🚩 우클릭: 깃발</span>
+                <button id="sound-toggle" class="hover:text-blue-500 flex items-center gap-1">🔊 사운드</button>
+            </div>
+            <button id="theme-toggle" class="p-2 bg-gray-100 dark:bg-slate-700 rounded-full hover:scale-110 transition-transform">
+                <span class="block dark:hidden">🌙</span>
+                <span class="hidden dark:block">☀️</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 결과 모달 -->
+    <div id="modal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl text-center max-w-sm w-full mx-4 shadow-2xl border border-gray-100 dark:border-slate-700">
+            <div id="modal-icon" class="text-7xl mb-4 animate-bounce"></div>
+            <h2 id="modal-title" class="text-3xl font-black mb-2 text-gray-800 dark:text-white"></h2>
+            <p id="modal-desc" class="text-gray-500 dark:text-gray-400 mb-8 font-medium"></p>
+            <button onclick="closeModal()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95">다시 하기</button>
+        </div>
+    </div>
+
+    <script>
+        // 사운드 시스템
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start();
+                osc.stop(now + 0.1);
+            } else if (type === 'flag') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start();
+                osc.stop(now + 0.1);
+            } else if (type === 'explosion') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.5);
+                osc.start();
+                osc.stop(now + 0.5);
+            } else if (type === 'win') {
+                [523, 659, 783, 1046].forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.frequency.setValueAtTime(f, now + i*0.1);
+                    g.gain.setValueAtTime(0.05, now + i*0.1);
+                    g.gain.exponentialRampToValueAtTime(0.01, now + i*0.1 + 0.2);
+                    o.start(now + i*0.1); o.stop(now + i*0.1 + 0.2);
+                });
+            }
+        }
+
+        // 테마 시스템
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        const boardElement = document.getElementById('board');
+        const mineCountDisplay = document.getElementById('mine-count');
+        const timerDisplay = document.getElementById('timer');
+        const resetBtn = document.getElementById('reset-btn');
+        const modal = document.getElementById('modal');
+        const soundToggle = document.getElementById('sound-toggle');
+
+        let rows, cols, mines;
+        let board = [];
+        let revealedCount = 0;
+        let flagsUsed = 0;
+        let timer = 0;
+        let timerInterval = null;
+        let isGameOver = false;
+        let isFirstClick = true;
+        let currentDifficulty = 'beginner';
+
+        const CONFIGS = {
+            beginner: { r: 9, c: 9, m: 10 },
+            intermediate: { r: 16, c: 16, m: 40 },
+            expert: { r: 16, c: 30, m: 99 }
+        };
+
+        function startGame(difficulty) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            currentDifficulty = difficulty;
+            const config = CONFIGS[difficulty];
+            rows = config.r; cols = config.c; mines = config.m;
+            
+            document.querySelectorAll('.difficulty-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${difficulty}`).classList.add('active');
+
+            resetState();
+            createBoard();
+            updateStats();
+        }
+
+        function resetState() {
+            clearInterval(timerInterval);
+            timer = 0; revealedCount = 0; flagsUsed = 0;
+            isGameOver = false; isFirstClick = true; board = [];
+            timerDisplay.textContent = '000';
+            resetBtn.textContent = '😊';
+            boardElement.innerHTML = '';
+            boardElement.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+            modal.classList.add('hidden');
+        }
+
+        function createBoard() {
+            for (let r = 0; r < rows; r++) {
+                board[r] = [];
+                for (let c = 0; c < cols; c++) {
+                    const cellObj = { r, c, isMine: false, revealed: false, flagged: false, neighborMines: 0 };
+                    board[r][c] = cellObj;
+                    const cellEl = document.createElement('div');
+                    cellEl.id = `cell-${r}-${c}`;
+                    cellEl.className = 'cell hidden';
+                    cellEl.addEventListener('click', () => handleCellClick(r, c));
+                    cellEl.addEventListener('contextmenu', (e) => { e.preventDefault(); handleRightClick(r, c); });
+                    boardElement.appendChild(cellEl);
+                }
+            }
+        }
+
+        function placeMines(firstR, firstC) {
+            let placed = 0;
+            while (placed < mines) {
+                const r = Math.floor(Math.random() * rows);
+                const c = Math.floor(Math.random() * cols);
+                if (!board[r][c].isMine && (Math.abs(r - firstR) > 1 || Math.abs(c - firstC) > 1)) {
+                    board[r][c].isMine = true; placed++;
+                }
+            }
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (!board[r][c].isMine) board[r][c].neighborMines = countNeighbors(r, c);
+                }
+            }
+        }
+
+        function countNeighbors(r, c) {
+            let count = 0;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].isMine) count++;
+                }
+            }
+            return count;
+        }
+
+        function handleCellClick(r, c) {
+            if (isGameOver || board[r][c].flagged || board[r][c].revealed) return;
+            if (isFirstClick) { isFirstClick = false; placeMines(r, c); startTimer(); }
+            if (board[r][c].isMine) { playSound('explosion'); gameOver(false); return; }
+            playSound('click');
+            revealCell(r, c);
+            if (revealedCount === (rows * cols) - mines) { playSound('win'); gameOver(true); }
+        }
+
+        function handleRightClick(r, c) {
+            if (isGameOver || board[r][c].revealed) return;
+            const cell = board[r][c];
+            cell.flagged = !cell.flagged;
+            flagsUsed += cell.flagged ? 1 : -1;
+            playSound('flag');
+            document.getElementById(`cell-${r}-${c}`).textContent = cell.flagged ? '🚩' : '';
+            updateStats();
+        }
+
+        function revealCell(r, c) {
+            const cell = board[r][c];
+            if (cell.revealed || cell.flagged) return;
+            cell.revealed = true; revealedCount++;
+            const el = document.getElementById(`cell-${r}-${c}`);
+            el.className = 'cell revealed';
+            if (cell.neighborMines > 0) {
+                el.textContent = cell.neighborMines;
+                el.classList.add(`count-${cell.neighborMines}`, 'font-black');
+            } else {
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) revealCell(nr, nc);
+                    }
+                }
+            }
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timer = Math.min(timer + 1, 999);
+                timerDisplay.textContent = String(timer).padStart(3, '0');
+            }, 1000);
+        }
+
+        function updateStats() {
+            mineCountDisplay.textContent = String(Math.max(0, mines - flagsUsed)).padStart(3, '0');
+        }
+
+        function gameOver(isWin) {
+            isGameOver = true; clearInterval(timerInterval);
+            resetBtn.textContent = isWin ? '😎' : '😵';
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = board[r][c];
+                    const el = document.getElementById(`cell-${r}-${c}`);
+                    if (cell.isMine) {
+                        el.textContent = '💣';
+                        if (!isWin) el.classList.add('mine');
+                    }
+                }
+            }
+            setTimeout(() => showModal(isWin), 800);
+        }
+
+        function showModal(isWin) {
+            document.getElementById('modal-icon').textContent = isWin ? '🏆' : '💥';
+            document.getElementById('modal-title').textContent = isWin ? '미션 성공!' : '펑! 게임 오버';
+            document.getElementById('modal-desc').textContent = isWin ? `${timer}초 만에 지뢰를 모두 제거했습니다.` : '지뢰를 밟았습니다. 다시 도전해 보세요!';
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() { startGame(currentDifficulty); }
+        resetBtn.addEventListener('click', () => startGame(currentDifficulty));
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundToggle.textContent = soundEnabled ? '🔊 사운드' : '🔇 사운드';
+            soundToggle.classList.toggle('text-gray-300', !soundEnabled);
+        });
+
+        window.onload = () => startGame('beginner');
+    </script>
+</body>
+</html>
